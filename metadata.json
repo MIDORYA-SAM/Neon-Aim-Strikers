@@ -1,7 +1,5 @@
 {
   "name": "Neon Aim Strikers: AI Pro",
-  "description": "Um treinador de mira e reação em alta octanagem com temática neon. Apresenta dificuldade dinâmica, multiplicadores de combo e um Treinador IA alimentado pelo Gemini que fornece análise de desempenho e feedback motivacional em tempo real.",
-  "requestFramePermissions": [
-    "microphone"
-  ]
+  "description": "Um treinador de mira e reação em alta octanagem com temática neon. Apresenta 3 níveis de progressão, dificuldade dinâmica e um Treinador IA alimentado pelo Gemini.",
+  "requestFramePermissions": []
 }

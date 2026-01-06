@@ -9,9 +9,6 @@ import ResultScreen from './components/ResultScreen';
 import HUD from './components/HUD';
 import AICoachOverlay from './components/AICoachOverlay';
 
-const GAME_DURATION = 30;
-const BASE_SPAWN_INTERVAL = 1000;
-const MIN_SPAWN_INTERVAL = 300; 
 const MAX_BOMB_HITS = 5;
 const MAX_TOTAL_MISSES = 10;
 const HIGH_SCORE_KEY = 'neon_aim_strikers_high_score';
@@ -26,7 +23,7 @@ const App: React.FC = () => {
     accuracy: 100,
     maxCombo: 0,
     currentCombo: 0,
-    timeRemaining: GAME_DURATION,
+    timeRemaining: 0,
     bombHits: 0,
   });
   const [targets, setTargets] = useState<Target[]>([]);
@@ -34,25 +31,21 @@ const App: React.FC = () => {
   const [totalAttempted, setTotalAttempted] = useState(0);
 
   const spawnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const gameLoopRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const movementLoopRef = useRef<number | null>(null);
 
-  // Load high score on initial mount
+  const currentDifficulty = Math.floor(stats.score / 100) + 1;
+
   useEffect(() => {
     const savedScore = localStorage.getItem(HIGH_SCORE_KEY);
-    if (savedScore) {
-      setHighScore(parseInt(savedScore, 10));
-    }
+    if (savedScore) setHighScore(parseInt(savedScore, 10));
   }, []);
 
   const endGame = useCallback(async (reason?: string) => {
     setStatus(GameStatus.ENDED);
     audioService.stopMusic();
     if (spawnTimerRef.current) clearTimeout(spawnTimerRef.current);
-    if (gameLoopRef.current) clearInterval(gameLoopRef.current);
     if (movementLoopRef.current) cancelAnimationFrame(movementLoopRef.current);
     
-    // Check and update high score
     setStats(currentStats => {
       if (currentStats.score > highScore) {
         setHighScore(currentStats.score);
@@ -62,15 +55,12 @@ const App: React.FC = () => {
     });
 
     const finalFeedback = await getCoachFeedback(stats, totalAttempted);
-    if (reason) {
-      finalFeedback.text = `${reason} ${finalFeedback.text}`;
-    }
+    if (reason) finalFeedback.text = `${reason} ${finalFeedback.text}`;
     setCoachMessage(finalFeedback);
   }, [stats, totalAttempted, highScore]);
 
   const startGame = () => {
     audioService.playClick('menu');
-    audioService.startMusic();
     setStats({
       score: 0,
       hits: 0,
@@ -78,13 +68,17 @@ const App: React.FC = () => {
       accuracy: 100,
       maxCombo: 0,
       currentCombo: 0,
-      timeRemaining: GAME_DURATION,
+      timeRemaining: 0,
       bombHits: 0,
     });
     setTargets([]);
     setTotalAttempted(0);
     setStatus(GameStatus.PLAYING);
-    setCoachMessage({ text: "Inicializando simulação tática avançada...", sentiment: "neutral" });
+    audioService.startMusic();
+    setCoachMessage({ 
+      text: "INICIANDO SOBREVIVÊNCIA: Procure pelos corações verdes para limpar seus erros!", 
+      sentiment: "neutral" 
+    });
   };
 
   const backToMenu = () => {
@@ -120,56 +114,44 @@ const App: React.FC = () => {
     };
   }, [status, updateMovement]);
 
-  useEffect(() => {
-    if (status === GameStatus.PLAYING) {
-      gameLoopRef.current = setInterval(() => {
-        setStats(prev => {
-          if (prev.timeRemaining <= 1) {
-            endGame();
-            return { ...prev, timeRemaining: 0 };
-          }
-          return { ...prev, timeRemaining: prev.timeRemaining - 1 };
-        });
-      }, 1000);
-    }
-    return () => {
-      if (gameLoopRef.current) clearInterval(gameLoopRef.current);
-    };
-  }, [status, endGame]);
-
   const spawnTarget = useCallback(() => {
     if (status !== GameStatus.PLAYING) return;
 
-    const level = Math.floor(stats.score / 150);
-    
+    const difficultyStage = Math.floor(stats.score / 100);
     const id = Math.random().toString(36).substr(2, 9);
     const padding = 60;
     const x = padding + Math.random() * (window.innerWidth - padding * 2);
     const y = 140 + Math.random() * (window.innerHeight - padding * 2 - 100);
     
-    const bombChance = 0.15 + (level * 0.05);
-    const goldenChance = 0.05 + (level * 0.02);
+    const bombChance = Math.min(0.4, 0.1 + (difficultyStage * 0.05));
+    const goldenChance = 0.05;
+    const lifeChance = 0.04; // 4% de chance de vida
     const rand = Math.random();
     
     let type: TargetType = 'standard';
-    let size = Math.max(25, 50 - (level * 3));
-    let lifeSpan = Math.max(600, 1500 - (level * 100));
-    let speedMult = 0.5 + (level * 0.8);
+    let size = Math.max(18, 55 - (difficultyStage * 4)); 
+    let lifeSpan = Math.max(400, 1800 - (difficultyStage * 150)); 
+    let speedMult = 1.0 + (difficultyStage * 0.6); 
 
     if (rand < goldenChance) {
       type = 'golden';
-      size = Math.max(15, 30 - (level * 2));
-      lifeSpan = Math.max(500, 1000 - (level * 50));
+      size *= 0.6;
+      lifeSpan *= 0.7;
       speedMult *= 1.5;
-    } else if (rand < (goldenChance + bombChance)) {
+    } else if (rand < (goldenChance + lifeChance)) {
+      type = 'life';
+      size = 45;
+      lifeSpan = 1500;
+      speedMult *= 1.2;
+    } else if (rand < (goldenChance + lifeChance + bombChance)) {
       type = 'bomb';
-      size = 60;
-      lifeSpan = 2000;
-      speedMult *= 0.7;
+      size = 50;
+      lifeSpan = 2500;
+      speedMult *= 0.5;
     }
 
-    const vx = (Math.random() - 0.5) * speedMult * 10;
-    const vy = (Math.random() - 0.5) * speedMult * 10;
+    const vx = (Math.random() - 0.5) * speedMult * 3;
+    const vy = (Math.random() - 0.5) * speedMult * 3;
 
     const newTarget: Target = {
       id, x, y, vx, vy, size, type,
@@ -180,8 +162,8 @@ const App: React.FC = () => {
     setTargets(prev => [...prev, newTarget]);
     setTotalAttempted(prev => prev + 1);
 
-    const currentInterval = Math.max(MIN_SPAWN_INTERVAL, BASE_SPAWN_INTERVAL - (stats.score / 30) * 15);
-    spawnTimerRef.current = setTimeout(spawnTarget, currentInterval);
+    const spawnInterval = Math.max(150, 1100 - (difficultyStage * 100));
+    spawnTimerRef.current = setTimeout(spawnTarget, spawnInterval);
   }, [status, stats.score]);
 
   useEffect(() => {
@@ -199,26 +181,18 @@ const App: React.FC = () => {
     const interval = setInterval(() => {
       const now = Date.now();
       setTargets(prev => {
-        const expired = prev.filter(t => t.expiresAt <= now && t.type !== 'bomb');
+        const expired = prev.filter(t => t.expiresAt <= now);
         if (expired.length > 0) {
-          setStats(s => {
-            const newMisses = s.misses + expired.length;
-            if (newMisses >= MAX_TOTAL_MISSES) {
-              endGame("Sobrecarga de alvos perdidos!");
-            }
-            return {
-              ...s,
-              currentCombo: 0,
-              misses: newMisses,
-              accuracy: (s.hits / (s.hits + newMisses)) * 100
-            };
-          });
+          const realTargetMissed = expired.some(t => t.type !== 'bomb' && t.type !== 'life');
+          if (realTargetMissed) {
+            setStats(s => ({ ...s, currentCombo: 0 }));
+          }
         }
         return prev.filter(t => t.expiresAt > now);
       });
     }, 100);
     return () => clearInterval(interval);
-  }, [status, endGame]);
+  }, [status]);
 
   const handleTargetClick = (target: Target) => {
     setTargets(prev => prev.filter(t => t.id !== target.id));
@@ -227,9 +201,7 @@ const App: React.FC = () => {
       audioService.playClick('miss');
       setStats(prev => {
         const newBombHits = prev.bombHits + 1;
-        if (newBombHits >= MAX_BOMB_HITS) {
-          endGame("Fritura de hardware! Muitas bombas!");
-        }
+        if (newBombHits >= MAX_BOMB_HITS) endGame("Integridade do sistema comprometida por explosivos!");
         return {
           ...prev,
           score: Math.max(0, prev.score - 50),
@@ -238,6 +210,17 @@ const App: React.FC = () => {
           accuracy: (prev.hits / (prev.hits + prev.misses + 1)) * 100,
         };
       });
+      return;
+    }
+
+    if (target.type === 'life') {
+      audioService.playClick('hit');
+      setStats(prev => ({
+        ...prev,
+        misses: Math.max(0, prev.misses - 1),
+        score: prev.score + 25,
+        currentCombo: prev.currentCombo + 1,
+      }));
       return;
     }
 
@@ -261,10 +244,6 @@ const App: React.FC = () => {
         accuracy: (newHits / totalShots) * 100,
       };
     });
-
-    if (stats.hits % 10 === 0 && stats.hits > 0) {
-      getCoachFeedback(stats, totalAttempted).then(setCoachMessage);
-    }
   };
 
   const handleMiss = () => {
@@ -272,9 +251,7 @@ const App: React.FC = () => {
     audioService.playClick('miss');
     setStats(prev => {
       const newMisses = prev.misses + 1;
-      if (newMisses >= MAX_TOTAL_MISSES) {
-        endGame("Mão trêmula? Tente novamente!");
-      }
+      if (newMisses >= MAX_TOTAL_MISSES) endGame("Recalibração necessária: Muitos disparos falhos.");
       const totalShots = prev.hits + newMisses;
       return {
         ...prev,
@@ -287,7 +264,7 @@ const App: React.FC = () => {
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-black flex flex-col">
-      <HUD stats={stats} />
+      <HUD stats={stats} difficulty={currentDifficulty} />
       
       {status === GameStatus.IDLE && (
         <MainMenu onStart={startGame} highScore={highScore} />

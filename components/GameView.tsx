@@ -10,7 +10,6 @@ interface GameViewProps {
 
 const GameView: React.FC<GameViewProps> = ({ targets, onTargetClick, onMiss }) => {
   const handleContainerClick = (e: React.MouseEvent) => {
-    // If we clicked the container and not a target
     if (e.target === e.currentTarget) {
       onMiss();
       createShotEffect(e.clientX, e.clientY, false);
@@ -52,8 +51,8 @@ const GameView: React.FC<GameViewProps> = ({ targets, onTargetClick, onMiss }) =
         >
           {target.type === 'bomb' && <i className="fa-solid fa-radiation text-black text-xl"></i>}
           {target.type === 'golden' && <i className="fa-solid fa-star text-white text-xs animate-spin"></i>}
+          {target.type === 'life' && <i className="fa-solid fa-heart text-white text-lg animate-pulse"></i>}
           
-          {/* Target Life Ring */}
           <svg className="absolute inset-0 w-full h-full -rotate-90">
             <circle
               cx="50%"
@@ -78,6 +77,8 @@ const getTargetStyle = (type: string) => {
       return 'bg-yellow-400 shadow-[0_0_20px_#facc15] border-2 border-white animate-pulse-slow';
     case 'bomb':
       return 'bg-red-600 shadow-[0_0_20px_#dc2626] border-2 border-black';
+    case 'life':
+      return 'bg-green-500 shadow-[0_0_20px_#22c55e] border-2 border-white animate-pulse-slow';
     case 'phantom':
       return 'bg-purple-500 opacity-50 shadow-[0_0_15px_#a855f7]';
     default:

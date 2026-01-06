@@ -6,7 +6,7 @@ export enum GameStatus {
   PAUSED = 'PAUSED'
 }
 
-export type TargetType = 'standard' | 'golden' | 'phantom' | 'bomb';
+export type TargetType = 'standard' | 'golden' | 'phantom' | 'bomb' | 'life';
 
 export interface Target {
   id: string;
